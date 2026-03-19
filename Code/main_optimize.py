@@ -25,7 +25,7 @@ capacity_costs = (capacity_cost_now / (1 + period_discount_rate) ** np.arange(4)
 params = {
     'gamma': 1.0,
     'T': 4,
-    'c_s': 1,
+    'c_s': 2,
     'c_k': capacity_costs,
     'iter': 10000,
     'Kmax': 3,
@@ -100,6 +100,17 @@ def compute_capacity_paths(details, P):
         'cum_served': cum_served,
     }
 
+def style_bar_axis(ax, xticks):
+    ax.set_xticks(xticks)
+    ax.set_axisbelow(True)
+    ax.grid(True, axis='y', zorder=0)
+
+BAR_STYLE = {
+    'edgecolor': 'black',
+    'linewidth': 1.0,
+    'zorder': 3,
+}
+
 # 3. Objective handle
 def obj(w):
     mc, _ = simulate_cost(w, params, seed=OPT_SEED)
@@ -143,11 +154,11 @@ print(w_best)
 active_leads = np.arange(params['min_lead'], params['Kmax'] + 1)
 avg_s_by_k = np.mean(det_base['s'], axis=(0, 1))[active_leads]
 plt.figure()
-plt.bar(active_leads, avg_s_by_k)
+plt.bar(active_leads, avg_s_by_k, **BAR_STYLE)
 plt.xlabel('Lead time k')
 plt.ylabel('Avg s_{t,k} per period')
 plt.title('Baseline investment profile by lead time')
-plt.grid(True)
+style_bar_axis(plt.gca(), active_leads)
 plt.show(block=False)
 
 # Bar chart: mean raw demand per period
@@ -160,8 +171,8 @@ Taxis = np.arange(1, params['T'] + 1)
 bar_width = 0.35
 
 plt.figure()
-plt.bar(Taxis - bar_width / 2, mu_raw, width=bar_width, label='Raw demand $d_t$')
-plt.bar(Taxis + bar_width / 2, mu_total, width=bar_width, label='Total demand $D^{tot}_t$')
+plt.bar(Taxis - bar_width / 2, mu_raw, width=bar_width, label='Raw demand $d_t$', **BAR_STYLE)
+plt.bar(Taxis + bar_width / 2, mu_total, width=bar_width, label='Total demand $D^{tot}_t$', color='tab:red', **BAR_STYLE)
 plt.errorbar(Taxis - bar_width / 2, mu_raw, yerr=sd_raw, fmt='none', ecolor='k', capsize=3)
 plt.errorbar(Taxis + bar_width / 2, mu_total, yerr=sd_total, fmt='none', ecolor='k', capsize=3)
 plt.xlim([0.5, params['T'] + 0.5])
@@ -169,7 +180,7 @@ plt.xlabel('Period t')
 plt.ylabel('Demand')
 plt.title('Mean raw and total demand by period')
 plt.legend()
-plt.grid(True)
+style_bar_axis(plt.gca(), Taxis)
 plt.show(block=False)
 
 # Sensitivity
@@ -197,7 +208,7 @@ wMat = np.zeros((nD, nE, Wdim))
 def evalScenarioSimple(P, w_start, REOPT, bounds, seed):
     if REOPT:
         P_opt = P.copy()
-        P_opt['iter'] = min(P['iter'], 1000)
+        P_opt['iter'] = min(P['iter'], 10000)
         def obj_inner(w):
             mc, _ = simulate_cost(w, P_opt, seed=seed)
             return mc
@@ -232,7 +243,7 @@ for i in range(nD):
 
 # Expected total cost heatmap
 plt.figure()
-sns.heatmap(meanCostMat, annot=True, xticklabels=labels_e, yticklabels=labels_d, cmap='viridis')
+sns.heatmap(meanCostMat, annot=True, fmt='.2f', xticklabels=labels_e, yticklabels=labels_d, cmap='Blues')
 plt.title('Expected Total Cost')
 plt.xlabel('Forecast Uncertainty Scenario')
 plt.ylabel('Demand Uncertainty Scenario')
@@ -246,8 +257,8 @@ fig.suptitle('Avg investment profile by lead time across uncertainty scenarios')
 for i in range(nD):
     for j in range(nE):
         ax = axes[i, j]
-        ax.bar(Kax, profileMat[i, j, active_leads], width=0.8)
-        ax.grid(True)
+        ax.bar(Kax, profileMat[i, j, active_leads], width=0.8, **BAR_STYLE)
+        style_bar_axis(ax, Kax)
         ax.set_ylim([0, yMax])
         ax.set_title(f'Demand {labels_d[i]} | Forecast {labels_e[j]}')
         if i == nD - 1:
@@ -264,8 +275,8 @@ fig.suptitle('Capacity orders placed by decision period')
 for i in range(nD):
     for j in range(nE):
         ax = axes[i, j]
-        ax.bar(Taxis, investPeriodMat[i, j, :], width=0.8)
-        ax.grid(True)
+        ax.bar(Taxis, investPeriodMat[i, j, :], width=0.8, **BAR_STYLE)
+        style_bar_axis(ax, Taxis)
         ax.set_xlim([0.5, params['T'] + 0.5])
         ax.set_ylim([0, yMax2])
         ax.set_title(f'Demand {labels_d[i]} | Forecast {labels_e[j]}')
@@ -297,31 +308,41 @@ plt.show(block=False)
 
 # Cumulative Demand vs Installed Capacity
 fig, axes = plt.subplots(nD, nE, figsize=(12, 10), sharex=True, sharey=True)
-fig.suptitle('Cumulative demand, served demand, and capacity made available')
+fig.suptitle('Cumulative demand vs cumulative capacity available')
+cum_bar_width = 0.36
 for i in range(nD):
     for j in range(nE):
         cap_paths = scenario_capacity[i][j]
         cumDemand_all = cap_paths['cum_demand']
         cumCapacity_all = cap_paths['cum_capacity']
-        cumServed_all = cap_paths['cum_served']
 
         cumDemand_mean = np.mean(cumDemand_all, axis=0)
         cumDemand_std = np.std(cumDemand_all, axis=0, ddof=0)
         cumCapacity_mean = np.mean(cumCapacity_all, axis=0)
-        cumServed_mean = np.mean(cumServed_all, axis=0)
+        cumCapacity_std = np.std(cumCapacity_all, axis=0, ddof=0)
 
         ax = axes[i, j]
-        ax.plot(Taxis, cumDemand_mean, '-o', color='tab:red', label='Cumulative demand')
-        ax.fill_between(
-            Taxis,
-            np.maximum(cumDemand_mean - cumDemand_std, 0),
-            cumDemand_mean + cumDemand_std,
+        ax.bar(
+            Taxis - cum_bar_width / 2,
+            cumDemand_mean,
+            width=cum_bar_width,
             color='tab:red',
-            alpha=0.12,
+            alpha=0.85,
+            label='Cumulative demand',
+            **BAR_STYLE,
         )
-        ax.plot(Taxis, cumServed_mean, '--^', color='tab:green', label='Cumulative served demand')
-        ax.plot(Taxis, cumCapacity_mean, '-s', color='tab:blue', label='Cumulative capacity available')
-        ax.grid(True)
+        ax.bar(
+            Taxis + cum_bar_width / 2,
+            cumCapacity_mean,
+            width=cum_bar_width,
+            color='tab:blue',
+            alpha=0.85,
+            label='Cumulative capacity available',
+            **BAR_STYLE,
+        )
+        ax.errorbar(Taxis - cum_bar_width / 2, cumDemand_mean, yerr=cumDemand_std, fmt='none', ecolor='k', capsize=3)
+        ax.errorbar(Taxis + cum_bar_width / 2, cumCapacity_mean, yerr=cumCapacity_std, fmt='none', ecolor='k', capsize=3)
+        style_bar_axis(ax, Taxis)
         ax.set_title(f'Demand {labels_d[i]} | Forecast {labels_e[j]}')
         if i == nD - 1:
             ax.set_xlabel('Period t')
@@ -341,11 +362,13 @@ for i in range(nD):
         print(f"Demand uncertainty: {labels_d[i].lower()}, Forecast uncertainty: {labels_e[j].lower()} {{{weights_str}}}")
 
 # c_k figure
+ck_active = np.array(params['c_k'])[active_leads]
+y_pad = 0.08 * (ck_active.max() - ck_active.min())
 plt.figure()
-plt.plot(active_leads, np.array(params['c_k'])[active_leads], '-o')
+plt.bar(active_leads, ck_active, color='steelblue', width=0.55, **BAR_STYLE)
 plt.xlabel('k')
 plt.ylabel('Cost')
 plt.title('Unit costs of capacity installed k periods later c_k')
-plt.grid(True)
-plt.ylim([0, max(np.array(params['c_k'])[active_leads]) * 1.05])
+style_bar_axis(plt.gca(), active_leads)
+plt.ylim([ck_active.min() - y_pad, ck_active.max() + y_pad])
 plt.show()
