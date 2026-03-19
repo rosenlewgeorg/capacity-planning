@@ -1,13 +1,19 @@
+# Keep the repository code-only by default.
+*
+!/.gitignore
+!/Code/
+!/Code/**
+
+# macOS metadata
 .DS_Store
 **/.DS_Store
 
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
+# Python artifacts under Code/
+Code/__pycache__/
+Code/**/*.py[cod]
+Code/**/*.pyo
 
 # Local environments
-.venv/
 Code/.venv/
 
 # Office temporary files
