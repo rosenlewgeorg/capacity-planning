@@ -1,10 +1,15 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pathlib import Path
 from scipy.optimize import minimize
 from simulate_cost import simulate_cost
 
 # 1. Parameters
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+FIGURES_DIR = PROJECT_ROOT / 'Figures'
+FIGURES_DIR.mkdir(exist_ok=True)
+
 demand_rel_sigma_scenarios = {
     'Low': np.array([0.05, 0.10, 0.15, 0.20]),
     'Med': np.array([0.10, 0.20, 0.30, 0.40]),
@@ -25,7 +30,7 @@ capacity_costs = (capacity_cost_now / (1 + period_discount_rate) ** np.arange(4)
 params = {
     'gamma': 1.0,
     'T': 4,
-    'c_s': 2,
+    'c_s': 1,
     'c_k': capacity_costs,
     'iter': 10000,
     'Kmax': 3,
@@ -35,7 +40,7 @@ params = {
     'demand_mean': np.array([5.0, 5.0, 5.0, 5.0]),
     'demand_rel_sigma': demand_rel_sigma_scenarios['Med'].copy(),
     'forecast_rel_alpha': forecast_rel_alpha_scenarios['Med'].copy(),
-    'estmu': 0
+    'estmu': 0,
 }
 
 # 2. Initial weights
@@ -111,6 +116,17 @@ BAR_STYLE = {
     'zorder': 3,
 }
 
+def finalize_figure(fig, filename, rect=None):
+    if rect is None:
+        fig.tight_layout()
+    else:
+        fig.tight_layout(rect=rect)
+    fig.savefig(FIGURES_DIR / filename, bbox_inches='tight')
+    if 'agg' in plt.get_backend().lower():
+        plt.close(fig)
+    else:
+        plt.show(block=False)
+
 # 3. Objective handle
 def obj(w):
     mc, _ = simulate_cost(w, params, seed=OPT_SEED)
@@ -153,35 +169,37 @@ print(w_best)
 # Investment profile by lead time
 active_leads = np.arange(params['min_lead'], params['Kmax'] + 1)
 avg_s_by_k = np.mean(det_base['s'], axis=(0, 1))[active_leads]
-plt.figure()
-plt.bar(active_leads, avg_s_by_k, **BAR_STYLE)
-plt.xlabel('Lead time k')
-plt.ylabel('Avg s_{t,k} per period')
-plt.title('Baseline investment profile by lead time')
-style_bar_axis(plt.gca(), active_leads)
-plt.show(block=False)
+fig, ax = plt.subplots()
+ax.bar(active_leads, avg_s_by_k, **BAR_STYLE)
+ax.set_xlabel('Lead time k')
+ax.set_ylabel('Avg s_{t,k} per period')
+ax.set_title('Baseline investment profile by lead time')
+style_bar_axis(ax, active_leads)
+finalize_figure(fig, 'baseline_investment_profile.pdf')
 
-# Bar chart: mean raw demand per period
+# Figure 1: demand distributions by period
 demands = sample_raw_demands(params, seed=BASE_SEED)
-mu_raw = np.mean(demands, axis=0)
-sd_raw = np.std(demands, axis=0, ddof=0)
-mu_total = np.mean(det_base['Dtot'], axis=0)
-sd_total = np.std(det_base['Dtot'], axis=0, ddof=0)
 Taxis = np.arange(1, params['T'] + 1)
-bar_width = 0.35
 
-plt.figure()
-plt.bar(Taxis - bar_width / 2, mu_raw, width=bar_width, label='Raw demand $d_t$', **BAR_STYLE)
-plt.bar(Taxis + bar_width / 2, mu_total, width=bar_width, label='Total demand $D^{tot}_t$', color='tab:red', **BAR_STYLE)
-plt.errorbar(Taxis - bar_width / 2, mu_raw, yerr=sd_raw, fmt='none', ecolor='k', capsize=3)
-plt.errorbar(Taxis + bar_width / 2, mu_total, yerr=sd_total, fmt='none', ecolor='k', capsize=3)
-plt.xlim([0.5, params['T'] + 0.5])
-plt.xlabel('Period t')
-plt.ylabel('Demand')
-plt.title('Mean raw and total demand by period')
-plt.legend()
-style_bar_axis(plt.gca(), Taxis)
-plt.show(block=False)
+fig, ax = plt.subplots()
+box = ax.boxplot(
+    [demands[:, t] for t in range(params['T'])],
+    tick_labels=Taxis,
+    patch_artist=True,
+    showfliers=False,
+)
+for patch in box['boxes']:
+    patch.set(facecolor='#9ecae1', edgecolor='black', linewidth=1.0)
+for median in box['medians']:
+    median.set(color='black', linewidth=1.2)
+for artist_group in ('whiskers', 'caps'):
+    for artist in box[artist_group]:
+        artist.set(color='black', linewidth=1.0)
+ax.set_xlabel('Period t')
+ax.set_ylabel('Raw demand $d_t$')
+ax.set_title('Demand distributions by period')
+style_bar_axis(ax, Taxis)
+finalize_figure(fig, 'figure1.pdf')
 
 # Sensitivity
 REOPT = True
@@ -208,7 +226,7 @@ wMat = np.zeros((nD, nE, Wdim))
 def evalScenarioSimple(P, w_start, REOPT, bounds, seed):
     if REOPT:
         P_opt = P.copy()
-        P_opt['iter'] = min(P['iter'], 10000)
+        P_opt['iter'] = min(P['iter'], 1000)
         def obj_inner(w):
             mc, _ = simulate_cost(w, P_opt, seed=seed)
             return mc
@@ -242,33 +260,14 @@ for i in range(nD):
         sfCostMat[i, j] = np.mean(det_cell['sfCost'])
 
 # Expected total cost heatmap
-plt.figure()
-sns.heatmap(meanCostMat, annot=True, fmt='.2f', xticklabels=labels_e, yticklabels=labels_d, cmap='Blues')
-plt.title('Expected Total Cost')
-plt.xlabel('Forecast Uncertainty Scenario')
-plt.ylabel('Demand Uncertainty Scenario')
-plt.show(block=False)
+fig, ax = plt.subplots()
+sns.heatmap(meanCostMat, annot=True, fmt='.2f', xticklabels=labels_e, yticklabels=labels_d, cmap='Blues', ax=ax)
+ax.set_title('Expected Total Cost')
+ax.set_xlabel('Forecast Uncertainty Scenario')
+ax.set_ylabel('Demand Uncertainty Scenario')
+finalize_figure(fig, 'figure3.pdf')
 
-# 3x3 matrix of investment profiles
-yMax = np.max(profileMat) * 1.1
-Kax = active_leads
-fig, axes = plt.subplots(nD, nE, figsize=(10, 8), sharex=True, sharey=True)
-fig.suptitle('Avg investment profile by lead time across uncertainty scenarios')
-for i in range(nD):
-    for j in range(nE):
-        ax = axes[i, j]
-        ax.bar(Kax, profileMat[i, j, active_leads], width=0.8, **BAR_STYLE)
-        style_bar_axis(ax, Kax)
-        ax.set_ylim([0, yMax])
-        ax.set_title(f'Demand {labels_d[i]} | Forecast {labels_e[j]}')
-        if i == nD - 1:
-            ax.set_xlabel('Lead time k')
-        if j == 0:
-            ax.set_ylabel('Avg s_{t,k}')
-plt.tight_layout()
-plt.show(block=False)
-
-# 3x3 matrix of average total investment by period
+# Figure 4: average total investment by period
 yMax2 = np.max(investPeriodMat) * 1.1
 fig, axes = plt.subplots(nD, nE, figsize=(10, 8), sharex=True, sharey=True)
 fig.suptitle('Capacity orders placed by decision period')
@@ -284,8 +283,25 @@ for i in range(nD):
             ax.set_xlabel('Period t')
         if j == 0:
             ax.set_ylabel('Avg orders placed')
-plt.tight_layout()
-plt.show(block=False)
+finalize_figure(fig, 'figure4.pdf', rect=[0, 0, 1, 0.97])
+
+# Figure 5: investment profile by lead time
+yMax = np.max(profileMat) * 1.1
+Kax = active_leads
+fig, axes = plt.subplots(nD, nE, figsize=(10, 8), sharex=True, sharey=True)
+fig.suptitle('Avg investment profile by lead time across uncertainty scenarios')
+for i in range(nD):
+    for j in range(nE):
+        ax = axes[i, j]
+        ax.bar(Kax, profileMat[i, j, active_leads], width=0.8, **BAR_STYLE)
+        style_bar_axis(ax, Kax)
+        ax.set_ylim([0, yMax])
+        ax.set_title(f'Demand {labels_d[i]} | Forecast {labels_e[j]}')
+        if i == nD - 1:
+            ax.set_xlabel('Lead time k')
+        if j == 0:
+            ax.set_ylabel('Avg s_{t,k}')
+finalize_figure(fig, 'figure5.pdf', rect=[0, 0, 1, 0.97])
 
 # Absolute costs with % in parentheses
 den = invCostMat + sfCostMat
@@ -303,8 +319,7 @@ sns.heatmap(sfCostMat, annot=np.array([[f'{sfCostMat[i,j]:.2f} ({shareSF[i,j]:.1
 axes[1].set_title('Shortfall Cost')
 axes[1].set_xlabel('Forecast Uncertainty Scenario')
 axes[1].set_ylabel('Demand Uncertainty Scenario')
-plt.tight_layout()
-plt.show(block=False)
+finalize_figure(fig, 'figure7.pdf', rect=[0, 0, 1, 0.95])
 
 # Cumulative Demand vs Installed Capacity
 fig, axes = plt.subplots(nD, nE, figsize=(12, 10), sharex=True, sharey=True)
@@ -350,8 +365,7 @@ for i in range(nD):
             ax.set_ylabel('Cumulative units')
         if i == 0 and j == 0:
             ax.legend(loc='upper left', fontsize=8)
-plt.tight_layout()
-plt.show(block=False)
+finalize_figure(fig, 'figure6.pdf', rect=[0, 0, 1, 0.97])
 
 # Weights Table (simple)
 Wdim_exact = params['Kmax'] + 2
@@ -364,11 +378,11 @@ for i in range(nD):
 # c_k figure
 ck_active = np.array(params['c_k'])[active_leads]
 y_pad = 0.08 * (ck_active.max() - ck_active.min())
-plt.figure()
-plt.bar(active_leads, ck_active, color='steelblue', width=0.55, **BAR_STYLE)
-plt.xlabel('k')
-plt.ylabel('Cost')
-plt.title('Unit costs of capacity installed k periods later c_k')
-style_bar_axis(plt.gca(), active_leads)
-plt.ylim([ck_active.min() - y_pad, ck_active.max() + y_pad])
-plt.show()
+fig, ax = plt.subplots()
+ax.bar(active_leads, ck_active, color='steelblue', width=0.55, **BAR_STYLE)
+ax.set_xlabel('Lead time k')
+ax.set_ylabel('Unit cost')
+ax.set_title('Unit costs of capacity by lead time')
+style_bar_axis(ax, active_leads)
+ax.set_ylim([ck_active.min() - y_pad, ck_active.max() + y_pad])
+finalize_figure(fig, 'figure2.pdf')
