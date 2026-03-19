@@ -1,0 +1,14 @@
+.DS_Store
+**/.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Local environments
+.venv/
+Code/.venv/
+
+# Office temporary files
+~$*
