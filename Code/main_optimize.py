@@ -46,6 +46,7 @@ OPT_SEED = 12345
 OPT_METHOD = 'Powell'
 FIGURES_DIR = Path(__file__).resolve().parents[1] / 'Figures'
 FIGURES_DIR.mkdir(exist_ok=True)
+HEATMAP_CMAP = 'Blues'
 
 print(f'Saving figures to {FIGURES_DIR}')
 
@@ -191,7 +192,7 @@ for i in range(nD):
 
 # Expected total cost heatmap
 fig, ax = plt.subplots()
-sns.heatmap(meanCostMat, annot=True, xticklabels=labels_e, yticklabels=labels_d, cmap='viridis', ax=ax)
+sns.heatmap(meanCostMat, annot=True, xticklabels=labels_e, yticklabels=labels_d, cmap=HEATMAP_CMAP, ax=ax)
 ax.set_title('Expected Total Cost')
 ax.set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 ax.set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
@@ -242,12 +243,12 @@ shareSF = np.divide(100 * sfCostMat, den, out=np.zeros_like(sfCostMat), where=de
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 fig.suptitle('Costs: absolute with % share')
-sns.heatmap(invCostMat, annot=np.array([[f'{invCostMat[i,j]:.2f} ({shareINV[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap='Blues', ax=axes[0])
+sns.heatmap(invCostMat, annot=np.array([[f'{invCostMat[i,j]:.2f} ({shareINV[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap=HEATMAP_CMAP, ax=axes[0])
 axes[0].set_title('Investment Cost')
 axes[0].set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 axes[0].set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
 
-sns.heatmap(sfCostMat, annot=np.array([[f'{sfCostMat[i,j]:.2f} ({shareSF[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap='Blues', ax=axes[1])
+sns.heatmap(sfCostMat, annot=np.array([[f'{sfCostMat[i,j]:.2f} ({shareSF[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap=HEATMAP_CMAP, ax=axes[1])
 axes[1].set_title('Shortfall Cost')
 axes[1].set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 axes[1].set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
