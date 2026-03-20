@@ -7,11 +7,12 @@ from simulate_cost import simulate_cost
 # 1. Parameters
 params = {
     'gamma': 0.2,
-    'T': 10,
+    'T': 3,
     'c_s': 1,
-    'c_k': [0.05, 0.0395, 0.03, 0.025, 0.02, 0.015, 0.0125, 0.01, 0.0075, 0.005],
+    # With a 3-period horizon, only lead times k = 0, 1, 2 can arrive in time.
+    'c_k': [0.05, 0.0395, 0.03],
     'iter': 10000,
-    'Kmax': 9,
+    'Kmax': 2,
     'delta': 0,
     'mu': 1,
     'sigma': 1,
@@ -22,23 +23,24 @@ params = {
 }
 
 # 2. Initial weights
-# Start from a smooth, horizon-decaying policy: near-term signals matter most,
-# but all forecasts retain some influence because long-lead capacity is cheaper.
+# Start from a smooth, short-horizon policy: near-term signals matter most,
+# while preserving some sensitivity to the longer lead times that still fit
+# inside the 3-period model.
 w0 = np.array([
     0.12,   # baseline investment
     0.35,   # e_{t,0}
     0.10,   # e_{t,1}
-    0.06,   # e_{t,2}
-    0.035,  # e_{t,3}
-    0.020,  # e_{t,4}
-    0.012,  # e_{t,5}
-    0.008,  # e_{t,6}
-    0.005,  # e_{t,7}
-    0.003,  # e_{t,8}
-    0.002   # e_{t,9}
+    0.06    # e_{t,2}
 ])
 
+if len(params['c_k']) != params['Kmax'] + 1:
+    raise ValueError("c_k must have length Kmax + 1.")
+
+if len(w0) != params['Kmax'] + 2:
+    raise ValueError("w0 must have length Kmax + 2.")
+
 OPT_SEED = 12345
+OPT_METHOD = 'Powell'
 
 # 3. Objective handle
 def obj(w):
@@ -48,8 +50,9 @@ def obj(w):
 # 4. Optimise
 bounds = [(0, None) for _ in range(len(w0))]
 print('Optimising...')
-# COBYQA is a derivative-free trust-region method for bound-constrained black-box problems.
-res = minimize(obj, w0, bounds=bounds, method='COBYQA', options={'disp': True, 'maxiter': 1000})
+# Powell is a derivative-free method that supports bounds in the SciPy version
+# available in this environment.
+res = minimize(obj, w0, bounds=bounds, method=OPT_METHOD, options={'disp': True, 'maxiter': 1000})
 w_best = res.x
 fval = res.fun
 
@@ -133,7 +136,7 @@ def evalScenarioSimple(P, w_start, REOPT, bounds, seed):
         def obj_inner(w):
             mc, _ = simulate_cost(w, P_opt, seed=seed)
             return mc
-        res_inner = minimize(obj_inner, w_start, bounds=bounds, method='COBYQA', options={'maxiter': 1000})
+        res_inner = minimize(obj_inner, w_start, bounds=bounds, method=OPT_METHOD, options={'maxiter': 1000})
         w_used = res_inner.x
         mc, det_cell = simulate_cost(w_used, P, seed=seed)
     else:
