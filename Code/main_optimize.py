@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from pathlib import Path
 from scipy.optimize import minimize
 from simulate_cost import simulate_cost
 
@@ -43,6 +44,10 @@ if len(w0) != params['Kmax'] + 2:
 
 OPT_SEED = 12345
 OPT_METHOD = 'Powell'
+FIGURES_DIR = Path(__file__).resolve().parents[1] / 'Figures'
+FIGURES_DIR.mkdir(exist_ok=True)
+
+print(f'Saving figures to {FIGURES_DIR}')
 
 # 3. Objective handle
 def obj(w):
@@ -82,14 +87,33 @@ print(f'  Shortfall cost     : {MSF:.4f}')
 print('Optimised weights (w_best):')
 print(w_best)
 
+def draw_bar_chart(ax, x_values, heights, width=0.8):
+    x_values = np.asarray(x_values)
+    ax.bar(
+        x_values,
+        heights,
+        width=width,
+        edgecolor='black',
+        linewidth=0.8,
+        zorder=3,
+    )
+    ax.set_axisbelow(True)
+    ax.grid(True, axis='y', zorder=0)
+    ax.set_xticks(x_values)
+    if x_values.size > 0:
+        ax.set_xlim([np.min(x_values) - 0.5, np.max(x_values) + 0.5])
+
+def save_figure(fig, filename):
+    fig.savefig(FIGURES_DIR / filename, format='pdf', bbox_inches='tight')
+
 # Investment profile by lead time
 avg_s_by_k = np.mean(det_base['s'], axis=(0, 1))
-plt.figure()
-plt.bar(range(params['Kmax'] + 1), avg_s_by_k)
-plt.xlabel('Lead time k')
-plt.ylabel('Avg s_{t,k} per period')
-plt.title('Baseline investment profile by lead time')
-plt.grid(True)
+fig, ax = plt.subplots()
+draw_bar_chart(ax, np.arange(params['Kmax'] + 1), avg_s_by_k)
+ax.set_xlabel('Lead time k')
+ax.set_ylabel('Avg s_{t,k} per period')
+ax.set_title('Baseline investment profile by lead time')
+save_figure(fig, 'baseline_investment_profile_by_lead_time.pdf')
 plt.show(block=False)
 
 # Bar chart: mean raw demand per period
@@ -100,14 +124,13 @@ mu_raw = np.mean(demands, axis=0)
 sd_raw = np.std(demands, axis=0, ddof=0)
 Taxis = np.arange(1, params['T'] + 1)
 
-plt.figure()
-plt.bar(Taxis, mu_raw)
-plt.errorbar(Taxis, mu_raw, yerr=[np.zeros_like(sd_raw), sd_raw], fmt='none', ecolor='k', capsize=0)
-plt.xlim([0.5, params['T'] + 0.5])
-plt.xlabel('Period t')
-plt.ylabel('Demand (E[d_t])')
-plt.title('Mean raw demand by period with standard deviation')
-plt.grid(True)
+fig, ax = plt.subplots()
+draw_bar_chart(ax, Taxis, mu_raw)
+ax.errorbar(Taxis, mu_raw, yerr=[np.zeros_like(sd_raw), sd_raw], fmt='none', ecolor='k', capsize=0, zorder=4)
+ax.set_xlabel('Period t')
+ax.set_ylabel('Demand (E[d_t])')
+ax.set_title('Mean raw demand by period with standard deviation')
+save_figure(fig, 'mean_raw_demand_by_period.pdf')
 plt.show(block=False)
 
 # Sensitivity
@@ -167,11 +190,12 @@ for i in range(nD):
         sfCostMat[i, j] = np.mean(det_cell['sfCost'])
 
 # Expected total cost heatmap
-plt.figure()
-sns.heatmap(meanCostMat, annot=True, xticklabels=labels_e, yticklabels=labels_d, cmap='viridis')
-plt.title('Expected Total Cost')
-plt.xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
-plt.ylabel('Demand Uncertainty ($\\sigma_t^2$)')
+fig, ax = plt.subplots()
+sns.heatmap(meanCostMat, annot=True, xticklabels=labels_e, yticklabels=labels_d, cmap='viridis', ax=ax)
+ax.set_title('Expected Total Cost')
+ax.set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
+ax.set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
+save_figure(fig, 'expected_total_cost_heatmap.pdf')
 plt.show(block=False)
 
 # 3x3 matrix of investment profiles
@@ -182,8 +206,7 @@ fig.suptitle('Avg investment profile by lead time across uncertainty scenarios')
 for i in range(nD):
     for j in range(nE):
         ax = axes[i, j]
-        ax.bar(Kax, profileMat[i, j, :], width=0.8)
-        ax.grid(True)
+        draw_bar_chart(ax, Kax, profileMat[i, j, :])
         ax.set_ylim([0, yMax])
         ax.set_title(f'Demand {labels_d[i]} | Forecast {labels_e[j]}')
         if i == nD - 1:
@@ -191,6 +214,7 @@ for i in range(nD):
         if j == 0:
             ax.set_ylabel('Avg s_{t,k}')
 plt.tight_layout()
+save_figure(fig, 'investment_profile_by_lead_time_matrix.pdf')
 plt.show(block=False)
 
 # 3x3 matrix of average total investment by period
@@ -200,9 +224,7 @@ fig.suptitle('Moment of investment across uncertainty scenarios')
 for i in range(nD):
     for j in range(nE):
         ax = axes[i, j]
-        ax.bar(Taxis, investPeriodMat[i, j, :], width=0.8)
-        ax.grid(True)
-        ax.set_xlim([0.5, params['T'] + 0.5])
+        draw_bar_chart(ax, Taxis, investPeriodMat[i, j, :])
         ax.set_ylim([0, yMax2])
         ax.set_title(f'Demand {labels_d[i]} | Forecast {labels_e[j]}')
         if i == nD - 1:
@@ -210,6 +232,7 @@ for i in range(nD):
         if j == 0:
             ax.set_ylabel('Avg $\\Sigma_k s_{t,k}$')
 plt.tight_layout()
+save_figure(fig, 'investment_moment_by_period_matrix.pdf')
 plt.show(block=False)
 
 # Absolute costs with % in parentheses
@@ -229,6 +252,7 @@ axes[1].set_title('Shortfall Cost')
 axes[1].set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 axes[1].set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
 plt.tight_layout()
+save_figure(fig, 'cost_share_heatmaps.pdf')
 plt.show(block=False)
 
 # Cumulative Demand vs Capacity
@@ -270,6 +294,7 @@ for i in range(nD):
         if j == 0:
             ax.set_ylabel('D^{tot}')
 plt.tight_layout()
+save_figure(fig, 'cumulative_demand_vs_capacity.pdf')
 plt.show(block=False)
 
 # Weights Table (simple)
@@ -281,11 +306,11 @@ for i in range(nD):
         print(f"Demand uncertainty: {labels_d[i].lower()}, Forecast uncertainty: {labels_e[j].lower()} {{{weights_str}}}")
 
 # c_k figure
-plt.figure()
-plt.plot(range(params['Kmax'] + 1), params['c_k'], '-o')
-plt.xlabel('k')
-plt.ylabel('Cost')
-plt.title('Unit costs of capacity installed k periods later c_k')
-plt.grid(True)
-plt.ylim([0, max(params['c_k']) * 1.05])
+fig, ax = plt.subplots()
+draw_bar_chart(ax, Kax, params['c_k'])
+ax.set_xlabel('Lead time k')
+ax.set_ylabel('Cost')
+ax.set_title('Unit costs of capacity installed k periods later c_k')
+ax.set_ylim([0, max(params['c_k']) * 1.05])
+save_figure(fig, 'unit_costs_by_lead_time.pdf')
 plt.show()
