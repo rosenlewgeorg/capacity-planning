@@ -37,8 +37,8 @@ function [meanCost, details] = compute_decision_cost(w, params)
 %   expected total cost over the simulation horizon.
 %
 %   Example:
-%       params = struct('gamma',0.2,'T',3,'c_s',1,
-%                       'c_k',[0.05 0.0395 0.03 0.025],
+%       params = struct('T',3,'c_s',1,
+%                       'r',0.05,'c_k',1./(1 + 0.05).^(0:3),
 %                       'iter',10000,'Kmax',3,'delta',0,
 %                       'mu',1,'sigma',1,'increase',1.1,
 %                       'sigmaeps',1,'incr',1.1,'estmu',0);

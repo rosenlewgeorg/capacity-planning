@@ -8,8 +8,7 @@ def simulate_cost(w, P, seed=None):
     seed : optional RNG seed for reproducibility
     """
     rng = np.random.default_rng(seed)
-        
-    gamma = P['gamma']
+
     T = P['T']
     c_s = P['c_s']
     c_k = np.array(P['c_k'])
@@ -30,10 +29,9 @@ def simulate_cost(w, P, seed=None):
     sigmas = sigma * np.sqrt(increase ** np.arange(T))
     demands = np.exp(mu + rng.standard_normal((iter_, T)) * sigmas)
     
-    Dtot = np.zeros((iter_, T))
-    Dtot[:, 0] = demands[:, 0]
-    for t in range(1, T):
-        Dtot[:, t] = demands[:, t] + gamma * Dtot[:, t-1]
+    # Demand always carries over fully, so each period's total demand equals
+    # the current raw demand plus all demand accumulated from earlier periods.
+    Dtot = np.cumsum(demands, axis=1)
         
     # Forecasts
     sigmaepses = np.zeros(Kmax + 1)

@@ -8,7 +8,6 @@ function [meanCost, details] = simulate_cost(w, P, seed)
 rng(seed);
 end
 
-    gamma = P.gamma;
 T = P.T;
 c_s = P.c_s;
 c_k = P.c_k;
@@ -28,11 +27,7 @@ assert(numel(c_k) >= Kmax + 1, 'c_k too short');
 % Demand sigmas = sigma * increase.^ (0 : T - 1);
 demands = exp(mu + randn(iter, T).*sigmas);
 
-Dtot = zeros(iter, T);
-Dtot( :, 1) = demands( :, 1);
-    for
-      t = 2 : T Dtot( :, t) = demands( :, t) + gamma.*Dtot( :, t - 1);
-    end
+Dtot = cumsum(demands, 2);
 
         % Forecasts sigmaepses = [ 0, sigmaeps *incr.^ (1
                                                         : Kmax) ];

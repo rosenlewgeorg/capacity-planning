@@ -6,13 +6,12 @@ from simulate_cost import simulate_cost
 
 # 1. Parameters
 params = {
-    'gamma': 0.2,
     'T': 3,
     'c_s': 1,
-    # With a 3-period horizon, only lead times k = 0, 1, 2 can arrive in time.
-    'c_k': [0.05, 0.0395, 0.03],
     'iter': 10000,
     'Kmax': 2,
+    # Use a simple 5% per-period discount rate to price future installations.
+    'r': 0.1,
     'delta': 0,
     'mu': 1,
     'sigma': 1,
@@ -21,6 +20,9 @@ params = {
     'incr': 1.1,
     'estmu': 0
 }
+
+# With a 3-period horizon, only lead times k = 0, 1, 2 can arrive in time.
+params['c_k'] = (1 / (1 + params['r']) ** np.arange(params['Kmax'] + 1)).tolist()
 
 # 2. Initial weights
 # Start from a smooth, short-horizon policy: near-term signals matter most,

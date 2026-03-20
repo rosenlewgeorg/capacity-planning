@@ -1,9 +1,10 @@
-% 1. Parameters params.gamma = 0.2;
+% 1. Parameters
 params.T = 10;
 params.c_s = 1;
-params.c_k = [0.05 0.0395 0.03 0.025 0.02 0.015 0.0125 0.01 0.0075 0.005];
 params.iter = 10000;
 params.Kmax = 9;
+params.r = 0.05;
+params.c_k = 1 ./ (1 + params.r).^(0:params.Kmax);
 params.delta = 0;
 params.mu = 1;
 params.sigma = 1;
