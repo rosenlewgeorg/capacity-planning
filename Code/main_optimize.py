@@ -11,7 +11,7 @@ params = {
     'c_s': 1,
     'iter': 10000,
     'Kmax': 2,
-    # Use a simple 5% per-period discount rate to price future installations.
+    # Use a simple 10% per-period discount rate to price future installations.
     'r': 0.1,
     'delta': 0,
     'mu': 1,
@@ -243,12 +243,12 @@ shareSF = np.divide(100 * sfCostMat, den, out=np.zeros_like(sfCostMat), where=de
 
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 fig.suptitle('Costs: absolute with % share')
-sns.heatmap(invCostMat, annot=np.array([[f'{invCostMat[i,j]:.2f} ({shareINV[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap=HEATMAP_CMAP, ax=axes[0])
+sns.heatmap(invCostMat, annot=np.array([[f'{invCostMat[i,j]:.2f} ({shareINV[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap='Blues', ax=axes[0])
 axes[0].set_title('Investment Cost')
 axes[0].set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 axes[0].set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
 
-sns.heatmap(sfCostMat, annot=np.array([[f'{sfCostMat[i,j]:.2f} ({shareSF[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap=HEATMAP_CMAP, ax=axes[1])
+sns.heatmap(sfCostMat, annot=np.array([[f'{sfCostMat[i,j]:.2f} ({shareSF[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap='Blues', ax=axes[1])
 axes[1].set_title('Shortfall Cost')
 axes[1].set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 axes[1].set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
