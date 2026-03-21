@@ -8,16 +8,16 @@ from simulate_cost import simulate_cost
 # 1. Parameters
 params = {
     'T': 3,
-    'c_s': 1,
+    'c_s': 3,
     'iter': 10000,
     'Kmax': 2,
     # Use a simple 10% per-period discount rate to price future installations.
-    'r': 0.1,
+    'r': 0.15,
     'delta': 0,
     'mu': 1,
     'sigma': 1,
     'increase': 1.1,
-    'sigmaeps': 1,
+    'sigmaeps': 1, 
     'incr': 1.1,
     'estmu': 0
 }
@@ -107,6 +107,19 @@ def draw_bar_chart(ax, x_values, heights, width=0.8):
 def save_figure(fig, filename):
     fig.savefig(FIGURES_DIR / filename, format='pdf', bbox_inches='tight')
 
+def upper_t_errorbar(ax, x, mean, std, capsize=5):
+    ax.errorbar(
+        x,
+        mean,
+        yerr=[np.zeros_like(std), std],
+        fmt='none',
+        ecolor='k',
+        capsize=capsize,
+        capthick=1.0,
+        elinewidth=1.0,
+        zorder=4,
+    )
+
 def simulate_demand_and_forecasts(P, seed):
     rng = np.random.default_rng(seed)
 
@@ -151,7 +164,7 @@ Taxis = np.arange(1, params['T'] + 1)
 
 fig, ax = plt.subplots()
 draw_bar_chart(ax, Taxis, mu_raw)
-ax.errorbar(Taxis, mu_raw, yerr=[np.zeros_like(sd_raw), sd_raw], fmt='none', ecolor='k', capsize=0, zorder=4)
+upper_t_errorbar(ax, Taxis, mu_raw, sd_raw)
 ax.set_xlabel('Period t')
 ax.set_ylabel('Demand (E[d_t])')
 ax.set_title('Mean raw demand by period with standard deviation')
@@ -192,24 +205,8 @@ ax.bar(
     label='Forecast from period 1',
     zorder=3,
 )
-ax.errorbar(
-    raw_bar_x,
-    mu_cumulative_demand,
-    yerr=[np.zeros_like(sd_cumulative_demand), sd_cumulative_demand],
-    fmt='none',
-    ecolor='k',
-    capsize=0,
-    zorder=4,
-)
-ax.errorbar(
-    forecast_bar_x,
-    mu_first_forecast,
-    yerr=[np.zeros_like(sd_first_forecast), sd_first_forecast],
-    fmt='none',
-    ecolor='k',
-    capsize=0,
-    zorder=4,
-)
+upper_t_errorbar(ax, raw_bar_x, mu_cumulative_demand, sd_cumulative_demand)
+upper_t_errorbar(ax, forecast_bar_x, mu_first_forecast, sd_first_forecast)
 ax.set_axisbelow(True)
 ax.grid(True, axis='y', zorder=0)
 ax.set_xticks(forecast_Taxis)
@@ -217,7 +214,7 @@ ax.set_xlim([np.min(forecast_Taxis) - 0.5, np.max(forecast_Taxis) + 0.5])
 ax.set_xlabel('Target period t')
 ax.set_ylabel('Cumulative demand / forecast mean with standard deviation')
 ax.set_title('Cumulative demand vs first-period cumulative forecasts')
-ax.legend()
+ax.legend(loc='upper left')
 save_figure(fig, 'cumulative_demand_vs_first_period_forecasts.pdf')
 plt.show(block=False)
 
@@ -245,7 +242,7 @@ wMat = np.zeros((nD, nE, Wdim))
 def evalScenarioSimple(P, w_start, REOPT, bounds, seed):
     if REOPT:
         P_opt = P.copy()
-        P_opt['iter'] = min(P['iter'], 1000)
+        P_opt['iter'] = min(P['iter'], 10000)
         def obj_inner(w):
             mc, _ = simulate_cost(w, P_opt, seed=seed)
             return mc
@@ -345,8 +342,10 @@ plt.show(block=False)
 
 # Cumulative Demand vs Capacity
 fig, axes = plt.subplots(nD, nE, figsize=(12, 10))
-fig.suptitle('Cumulative Demand vs Capacity (bubble size = standard deviation of D^{tot})')
+fig.suptitle('Cumulative Demand vs Capacity')
 lightBlue = (0.6, 0.85, 1.0)
+darkBlue = '#3182bd'
+bar_width = 0.34
 for i in range(nD):
     for j in range(nE):
         P = params.copy()
@@ -362,25 +361,44 @@ for i in range(nD):
         cumDemand_mean = np.mean(cumDemand_all, axis=0)
         cumCapacity_mean = np.mean(cumCapacity_all, axis=0)
         cumDemand_std = np.std(cumDemand_all, axis=0, ddof=0)
-        
-        max_std = np.max(cumDemand_std)
-        bubbleSize = np.zeros_like(cumDemand_std) if max_std == 0 else 1800 * (cumDemand_std / max_std)
+        cumCapacity_std = np.std(cumCapacity_all, axis=0, ddof=0)
         
         ax = axes[i, j]
-        ax.scatter(cumCapacity_mean, cumDemand_mean, s=bubbleSize, color=lightBlue, edgecolor='k', alpha=0.7)
-        for t in range(params['T']):
-            ax.text(cumCapacity_mean[t], cumDemand_mean[t], str(t+1), va='center', ha='center', color='k', fontweight='bold')
-            
-        lineMin = min(np.min(cumCapacity_mean), np.min(cumDemand_mean))
-        lineMax = max(np.max(cumCapacity_mean) + 50, np.max(cumDemand_mean) + 50)
-        ax.plot([lineMin, lineMax], [lineMin, lineMax], '--k', linewidth=1.0)
-        
-        ax.grid(True)
+        demand_bar_x = Taxis - bar_width / 2
+        capacity_bar_x = Taxis + bar_width / 2
+        ax.bar(
+            demand_bar_x,
+            cumDemand_mean,
+            width=bar_width,
+            color=lightBlue,
+            edgecolor='black',
+            linewidth=0.8,
+            label='Cumulative demand',
+            zorder=3,
+        )
+        ax.bar(
+            capacity_bar_x,
+            cumCapacity_mean,
+            width=bar_width,
+            color=darkBlue,
+            edgecolor='black',
+            linewidth=0.8,
+            label='Cumulative capacity',
+            zorder=3,
+        )
+        upper_t_errorbar(ax, demand_bar_x, cumDemand_mean, cumDemand_std)
+        upper_t_errorbar(ax, capacity_bar_x, cumCapacity_mean, cumCapacity_std)
+        ax.set_axisbelow(True)
+        ax.grid(True, axis='y', zorder=0)
+        ax.set_xticks(Taxis)
+        ax.set_xlim([np.min(Taxis) - 0.5, np.max(Taxis) + 0.5])
         ax.set_title(f'Demand {labels_d[i]} | Forecast {labels_e[j]}')
         if i == nD - 1:
-            ax.set_xlabel('S^{tot}')
+            ax.set_xlabel('Target period t')
         if j == 0:
-            ax.set_ylabel('D^{tot}')
+            ax.set_ylabel('Cumulative mean with standard deviation')
+        if i == 0 and j == 0:
+            ax.legend(loc='upper left')
 plt.tight_layout()
 save_figure(fig, 'cumulative_demand_vs_capacity.pdf')
 plt.show(block=False)
