@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
+from matplotlib import colors
 from scipy.optimize import minimize
 from simulate_cost import simulate_cost
 
@@ -12,7 +13,7 @@ params = {
     'iter': 10000,
     'Kmax': 2,
     # Use a simple 10% per-period discount rate to price future installations.
-    'r': 0.15,
+    'r': 0.5,
     'delta': 0,
     'mu': 1,
     'sigma': 1,
@@ -46,7 +47,15 @@ OPT_SEED = 12345
 OPT_METHOD = 'Powell'
 FIGURES_DIR = Path(__file__).resolve().parents[1] / 'Figures'
 FIGURES_DIR.mkdir(exist_ok=True)
-HEATMAP_CMAP = 'Blues'
+
+def truncated_cmap(name, minval=0.06, maxval=0.78, n=256):
+    base_cmap = plt.get_cmap(name)
+    return colors.LinearSegmentedColormap.from_list(
+        f'{name}_trunc',
+        base_cmap(np.linspace(minval, maxval, n))
+    )
+
+HEATMAP_CMAP = truncated_cmap('Blues')
 
 print(f'Saving figures to {FIGURES_DIR}')
 
@@ -151,7 +160,7 @@ avg_s_by_k = np.mean(det_base['s'], axis=(0, 1))
 fig, ax = plt.subplots()
 draw_bar_chart(ax, np.arange(params['Kmax'] + 1), avg_s_by_k)
 ax.set_xlabel('Lead time k')
-ax.set_ylabel('Avg s_{t,k} per period')
+ax.set_ylabel(r'Avg $s_{t,k}$ per period')
 ax.set_title('Baseline investment profile by lead time')
 save_figure(fig, 'baseline_investment_profile_by_lead_time.pdf')
 plt.show(block=False)
@@ -219,11 +228,11 @@ save_figure(fig, 'cumulative_demand_vs_first_period_forecasts.pdf')
 plt.show(block=False)
 
 # Sensitivity
-REOPT = False
+REOPT = True
 BASE_SEED = 12345
 
-sigma_factors = [2/3, 1.0, 1.5]
-sigmaeps_factors = [2/3, 1.0, 1.5]
+sigma_factors = [0.8, 1.0, 1.25]
+sigmaeps_factors = [0.8, 1.0, 1.25]
 labels_d = ['Low', 'Med', 'High']
 labels_e = ['Low', 'Med', 'High']
 
@@ -297,7 +306,7 @@ for i in range(nD):
         if i == nD - 1:
             ax.set_xlabel('Lead time k')
         if j == 0:
-            ax.set_ylabel('Avg s_{t,k}')
+            ax.set_ylabel(r'Avg $s_{t,k}$')
 plt.tight_layout()
 save_figure(fig, 'investment_profile_by_lead_time_matrix.pdf')
 plt.show(block=False)
@@ -315,7 +324,7 @@ for i in range(nD):
         if i == nD - 1:
             ax.set_xlabel('Period t')
         if j == 0:
-            ax.set_ylabel('Avg $\\Sigma_k s_{t,k}$')
+            ax.set_ylabel(r'Avg $\sum_k s_{t,k}$')
 plt.tight_layout()
 save_figure(fig, 'investment_moment_by_period_matrix.pdf')
 plt.show(block=False)
@@ -332,7 +341,7 @@ axes[0].set_title('Investment Cost')
 axes[0].set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 axes[0].set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
 
-sns.heatmap(sfCostMat, annot=np.array([[f'{sfCostMat[i,j]:.2f} ({shareSF[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap='Blues', ax=axes[1])
+sns.heatmap(sfCostMat, annot=np.array([[f'{sfCostMat[i,j]:.2f} ({shareSF[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap=HEATMAP_CMAP, ax=axes[1])
 axes[1].set_title('Shortfall Cost')
 axes[1].set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 axes[1].set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
@@ -341,7 +350,7 @@ save_figure(fig, 'cost_share_heatmaps.pdf')
 plt.show(block=False)
 
 # Cumulative Demand vs Capacity
-fig, axes = plt.subplots(nD, nE, figsize=(12, 10))
+fig, axes = plt.subplots(nD, nE, figsize=(12, 10), sharex=True, sharey=True)
 fig.suptitle('Cumulative Demand vs Capacity')
 lightBlue = (0.6, 0.85, 1.0)
 darkBlue = '#3182bd'
@@ -350,8 +359,8 @@ for i in range(nD):
     for j in range(nE):
         P = params.copy()
         P['iter'] = 50000
-        P['sigma'] = params['sigma'] * np.sqrt(sigma_factors[i])
-        P['sigmaeps'] = params['sigmaeps'] * np.sqrt(sigmaeps_factors[j])
+        P['sigma'] = params['sigma'] * sigma_factors[i]
+        P['sigmaeps'] = params['sigmaeps'] * sigmaeps_factors[j]
         
         _, det_cell, _ = evalScenarioSimple(P, w_best, REOPT, bounds, BASE_SEED)
         
@@ -399,6 +408,9 @@ for i in range(nD):
             ax.set_ylabel('Cumulative mean with standard deviation')
         if i == 0 and j == 0:
             ax.legend(loc='upper left')
+shared_ymax = max(ax.get_ylim()[1] for ax in axes.flat)
+for ax in axes.flat:
+    ax.set_ylim(0, shared_ymax)
 plt.tight_layout()
 save_figure(fig, 'cumulative_demand_vs_capacity.pdf')
 plt.show(block=False)
