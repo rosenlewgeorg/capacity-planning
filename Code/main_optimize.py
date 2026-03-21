@@ -219,11 +219,11 @@ save_figure(fig, 'cumulative_demand_vs_first_period_forecasts.pdf')
 plt.show(block=False)
 
 # Sensitivity
-REOPT = True
+REOPT = False
 BASE_SEED = 12345
 
-sigma_factors = [0.5, 1.0, 2.0]
-sigmaeps_factors = [0.5, 1.0, 2.0]
+sigma_factors = [2/3, 1.0, 1.5]
+sigmaeps_factors = [2/3, 1.0, 1.5]
 labels_d = ['Low', 'Med', 'High']
 labels_e = ['Low', 'Med', 'High']
 
@@ -258,8 +258,8 @@ for i in range(nD):
     for j in range(nE):
         P = params.copy()
         P['iter'] = 50000
-        P['sigma'] = params['sigma'] * np.sqrt(sigma_factors[i])
-        P['sigmaeps'] = params['sigmaeps'] * np.sqrt(sigmaeps_factors[j])
+        P['sigma'] = params['sigma'] * sigma_factors[i]
+        P['sigmaeps'] = params['sigmaeps'] * sigmaeps_factors[j]
         
         mc, det_cell, w_used = evalScenarioSimple(P, w_best, REOPT, bounds, BASE_SEED)
         meanCostMat[i, j] = mc
