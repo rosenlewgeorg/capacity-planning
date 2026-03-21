@@ -16,9 +16,9 @@ params = {
     'delta': 0,
     'mu': 1,
     'sigma': 1,
-    'increase': 1.1,
+    'increase': 1.5,
     'sigmaeps': 1, 
-    'incr': 1.1,
+    'incr': 1.5,
     'estmu': 0
 }
 
@@ -222,8 +222,8 @@ plt.show(block=False)
 REOPT = True
 BASE_SEED = 12345
 
-sigma_factors = [0.7, 1.0, 1.3]
-sigmaeps_factors = [0.7, 1.0, 1.3]
+sigma_factors = [0.5, 1.0, 2.0]
+sigmaeps_factors = [0.5, 1.0, 2.0]
 labels_d = ['Low', 'Med', 'High']
 labels_e = ['Low', 'Med', 'High']
 
@@ -246,7 +246,7 @@ def evalScenarioSimple(P, w_start, REOPT, bounds, seed):
         def obj_inner(w):
             mc, _ = simulate_cost(w, P_opt, seed=seed)
             return mc
-        res_inner = minimize(obj_inner, w_start, bounds=bounds, method=OPT_METHOD, options={'maxiter': 1000})
+        res_inner = minimize(obj_inner, w_start, bounds=bounds, method=OPT_METHOD, options={'maxiter': 10000})
         w_used = res_inner.x
         mc, det_cell = simulate_cost(w_used, P, seed=seed)
     else:
