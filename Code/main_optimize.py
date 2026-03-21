@@ -107,6 +107,32 @@ def draw_bar_chart(ax, x_values, heights, width=0.8):
 def save_figure(fig, filename):
     fig.savefig(FIGURES_DIR / filename, format='pdf', bbox_inches='tight')
 
+def simulate_demand_and_forecasts(P, seed):
+    rng = np.random.default_rng(seed)
+
+    sigmas = P['sigma'] * np.sqrt(P['increase'] ** np.arange(P['T']))
+    demands = np.exp(P['mu'] + rng.standard_normal((P['iter'], P['T'])) * sigmas)
+    total_demand = np.cumsum(demands, axis=1)
+
+    sigmaepses = np.zeros(P['Kmax'] + 1)
+    if P['Kmax'] >= 1:
+        sigmaepses[1:] = P['sigmaeps'] * np.sqrt(P['incr'] ** np.arange(1, P['Kmax'] + 1))
+
+    forecasts = np.full((P['iter'], P['T'], P['Kmax'] + 1), np.nan)
+    for k in range(P['Kmax'] + 1):
+        if k >= P['T']:
+            break
+        t_idx = np.arange(P['T'] - k)
+        if k == 0:
+            forecasts[:, t_idx, 0] = total_demand[:, t_idx]
+        else:
+            s = sigmaepses[k]
+            mu_k = -0.5 * (s ** 2)
+            eps_draws = rng.lognormal(mean=mu_k, sigma=s, size=(P['iter'], len(t_idx)))
+            forecasts[:, t_idx, k] = total_demand[:, t_idx + k] * eps_draws
+
+    return demands, total_demand, forecasts
+
 # Investment profile by lead time
 avg_s_by_k = np.mean(det_base['s'], axis=(0, 1))
 fig, ax = plt.subplots()
@@ -118,9 +144,7 @@ save_figure(fig, 'baseline_investment_profile_by_lead_time.pdf')
 plt.show(block=False)
 
 # Bar chart: mean raw demand per period
-rng = np.random.default_rng(BASE_SEED)
-sigmas = params['sigma'] * np.sqrt(params['increase'] ** np.arange(params['T']))
-demands = np.exp(params['mu'] + rng.standard_normal((params['iter'], params['T'])) * sigmas)
+demands, total_demands, forecasts = simulate_demand_and_forecasts(params, BASE_SEED)
 mu_raw = np.mean(demands, axis=0)
 sd_raw = np.std(demands, axis=0, ddof=0)
 Taxis = np.arange(1, params['T'] + 1)
@@ -132,6 +156,69 @@ ax.set_xlabel('Period t')
 ax.set_ylabel('Demand (E[d_t])')
 ax.set_title('Mean raw demand by period with standard deviation')
 save_figure(fig, 'mean_raw_demand_by_period.pdf')
+plt.show(block=False)
+
+# Bar chart: cumulative demand vs first-period cumulative forecasts forward
+forecast_horizon = min(params['T'], params['Kmax'] + 1)
+forecast_Taxis = np.arange(1, forecast_horizon + 1)
+first_period_cumulative_forecasts = forecasts[:, 0, :forecast_horizon]
+mu_cumulative_demand = np.mean(total_demands[:, :forecast_horizon], axis=0)
+sd_cumulative_demand = np.std(total_demands[:, :forecast_horizon], axis=0, ddof=0)
+mu_first_forecast = np.mean(first_period_cumulative_forecasts, axis=0)
+sd_first_forecast = np.std(first_period_cumulative_forecasts, axis=0, ddof=0)
+
+fig, ax = plt.subplots()
+bar_width = 0.34
+raw_bar_x = forecast_Taxis - bar_width / 2
+forecast_bar_x = forecast_Taxis + bar_width / 2
+
+ax.bar(
+    raw_bar_x,
+    mu_cumulative_demand,
+    width=bar_width,
+    color='#bdd7e7',
+    edgecolor='black',
+    linewidth=0.8,
+    label='Cumulative demand',
+    zorder=3,
+)
+ax.bar(
+    forecast_bar_x,
+    mu_first_forecast,
+    width=bar_width,
+    color='#3182bd',
+    edgecolor='black',
+    linewidth=0.8,
+    label='Forecast from period 1',
+    zorder=3,
+)
+ax.errorbar(
+    raw_bar_x,
+    mu_cumulative_demand,
+    yerr=[np.zeros_like(sd_cumulative_demand), sd_cumulative_demand],
+    fmt='none',
+    ecolor='k',
+    capsize=0,
+    zorder=4,
+)
+ax.errorbar(
+    forecast_bar_x,
+    mu_first_forecast,
+    yerr=[np.zeros_like(sd_first_forecast), sd_first_forecast],
+    fmt='none',
+    ecolor='k',
+    capsize=0,
+    zorder=4,
+)
+ax.set_axisbelow(True)
+ax.grid(True, axis='y', zorder=0)
+ax.set_xticks(forecast_Taxis)
+ax.set_xlim([np.min(forecast_Taxis) - 0.5, np.max(forecast_Taxis) + 0.5])
+ax.set_xlabel('Target period t')
+ax.set_ylabel('Cumulative demand / forecast mean with standard deviation')
+ax.set_title('Cumulative demand vs first-period cumulative forecasts')
+ax.legend()
+save_figure(fig, 'cumulative_demand_vs_first_period_forecasts.pdf')
 plt.show(block=False)
 
 # Sensitivity
