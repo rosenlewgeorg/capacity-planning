@@ -175,7 +175,7 @@ fig, ax = plt.subplots()
 draw_bar_chart(ax, Taxis, mu_raw)
 upper_t_errorbar(ax, Taxis, mu_raw, sd_raw)
 ax.set_xlabel('Period t')
-ax.set_ylabel('Demand (E[d_t])')
+ax.set_ylabel('Expected demand')
 ax.set_title('Mean raw demand by period with standard deviation')
 save_figure(fig, 'mean_raw_demand_by_period.pdf')
 plt.show(block=False)
@@ -306,7 +306,7 @@ for i in range(nD):
         if i == nD - 1:
             ax.set_xlabel('Lead time k')
         if j == 0:
-            ax.set_ylabel(r'Avg $s_{t,k}$')
+            ax.set_ylabel('Avg capacity investment')
 plt.tight_layout()
 save_figure(fig, 'investment_profile_by_lead_time_matrix.pdf')
 plt.show(block=False)
