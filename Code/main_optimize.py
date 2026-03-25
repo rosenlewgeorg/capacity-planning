@@ -116,11 +116,20 @@ def draw_bar_chart(ax, x_values, heights, width=0.8):
 def save_figure(fig, filename):
     fig.savefig(FIGURES_DIR / filename, format='pdf', bbox_inches='tight')
 
-def upper_t_errorbar(ax, x, mean, std, capsize=5):
+def percentile_interval_errors(samples, axis=0, lower_pct=5, upper_pct=95):
+    samples = np.asarray(samples)
+    sample_mean = np.mean(samples, axis=axis)
+    lower_bound = np.percentile(samples, lower_pct, axis=axis)
+    upper_bound = np.percentile(samples, upper_pct, axis=axis)
+    lower_error = np.maximum(sample_mean - lower_bound, 0)
+    upper_error = np.maximum(upper_bound - sample_mean, 0)
+    return lower_error, upper_error
+
+def percentile_errorbar(ax, x, mean, lower_error, upper_error, capsize=5):
     ax.errorbar(
         x,
         mean,
-        yerr=[np.zeros_like(std), std],
+        yerr=[lower_error, upper_error],
         fmt='none',
         ecolor='k',
         capsize=capsize,
@@ -168,15 +177,15 @@ plt.show(block=False)
 # Bar chart: mean raw demand per period
 demands, total_demands, forecasts = simulate_demand_and_forecasts(params, BASE_SEED)
 mu_raw = np.mean(demands, axis=0)
-sd_raw = np.std(demands, axis=0, ddof=0)
+p5_raw_err, p95_raw_err = percentile_interval_errors(demands, axis=0)
 Taxis = np.arange(1, params['T'] + 1)
 
 fig, ax = plt.subplots()
 draw_bar_chart(ax, Taxis, mu_raw)
-upper_t_errorbar(ax, Taxis, mu_raw, sd_raw)
+percentile_errorbar(ax, Taxis, mu_raw, p5_raw_err, p95_raw_err)
 ax.set_xlabel('Period t')
 ax.set_ylabel('Expected demand')
-ax.set_title('Mean raw demand by period with standard deviation')
+ax.set_title('Mean raw demand by period with P5-P95')
 save_figure(fig, 'mean_raw_demand_by_period.pdf')
 plt.show(block=False)
 
@@ -185,9 +194,15 @@ forecast_horizon = min(params['T'], params['Kmax'] + 1)
 forecast_Taxis = np.arange(1, forecast_horizon + 1)
 first_period_cumulative_forecasts = forecasts[:, 0, :forecast_horizon]
 mu_cumulative_demand = np.mean(total_demands[:, :forecast_horizon], axis=0)
-sd_cumulative_demand = np.std(total_demands[:, :forecast_horizon], axis=0, ddof=0)
+p5_cumulative_demand_err, p95_cumulative_demand_err = percentile_interval_errors(
+    total_demands[:, :forecast_horizon],
+    axis=0,
+)
 mu_first_forecast = np.mean(first_period_cumulative_forecasts, axis=0)
-sd_first_forecast = np.std(first_period_cumulative_forecasts, axis=0, ddof=0)
+p5_first_forecast_err, p95_first_forecast_err = percentile_interval_errors(
+    first_period_cumulative_forecasts,
+    axis=0,
+)
 
 fig, ax = plt.subplots()
 bar_width = 0.34
@@ -214,14 +229,26 @@ ax.bar(
     label='Forecast from period 1',
     zorder=3,
 )
-upper_t_errorbar(ax, raw_bar_x, mu_cumulative_demand, sd_cumulative_demand)
-upper_t_errorbar(ax, forecast_bar_x, mu_first_forecast, sd_first_forecast)
+percentile_errorbar(
+    ax,
+    raw_bar_x,
+    mu_cumulative_demand,
+    p5_cumulative_demand_err,
+    p95_cumulative_demand_err,
+)
+percentile_errorbar(
+    ax,
+    forecast_bar_x,
+    mu_first_forecast,
+    p5_first_forecast_err,
+    p95_first_forecast_err,
+)
 ax.set_axisbelow(True)
 ax.grid(True, axis='y', zorder=0)
 ax.set_xticks(forecast_Taxis)
 ax.set_xlim([np.min(forecast_Taxis) - 0.5, np.max(forecast_Taxis) + 0.5])
 ax.set_xlabel('Target period t')
-ax.set_ylabel('Cumulative demand / forecast mean with standard deviation')
+ax.set_ylabel('Cumulative demand / forecast mean with P5-P95')
 ax.set_title('Cumulative demand vs first-period cumulative forecasts')
 ax.legend(loc='upper left')
 save_figure(fig, 'cumulative_demand_vs_first_period_forecasts.pdf')
@@ -314,7 +341,7 @@ plt.show(block=False)
 # 3x3 matrix of average total investment by period
 yMax2 = np.max(investPeriodMat) * 1.1
 fig, axes = plt.subplots(nD, nE, figsize=(10, 8), sharex=True, sharey=True)
-fig.suptitle('Moment of investment across uncertainty scenarios')
+fig.suptitle('Period of investment across uncertainty scenarios')
 for i in range(nD):
     for j in range(nE):
         ax = axes[i, j]
@@ -324,9 +351,9 @@ for i in range(nD):
         if i == nD - 1:
             ax.set_xlabel('Period t')
         if j == 0:
-            ax.set_ylabel(r'Avg $\sum_k s_{t,k}$')
+            ax.set_ylabel(r'Avg capacity investment')
 plt.tight_layout()
-save_figure(fig, 'investment_moment_by_period_matrix.pdf')
+save_figure(fig, 'investment_period_matrix.pdf')
 plt.show(block=False)
 
 # Absolute costs with % in parentheses
@@ -369,8 +396,8 @@ for i in range(nD):
         
         cumDemand_mean = np.mean(cumDemand_all, axis=0)
         cumCapacity_mean = np.mean(cumCapacity_all, axis=0)
-        cumDemand_std = np.std(cumDemand_all, axis=0, ddof=0)
-        cumCapacity_std = np.std(cumCapacity_all, axis=0, ddof=0)
+        cumDemand_p5_err, cumDemand_p95_err = percentile_interval_errors(cumDemand_all, axis=0)
+        cumCapacity_p5_err, cumCapacity_p95_err = percentile_interval_errors(cumCapacity_all, axis=0)
         
         ax = axes[i, j]
         demand_bar_x = Taxis - bar_width / 2
@@ -395,8 +422,8 @@ for i in range(nD):
             label='Cumulative capacity',
             zorder=3,
         )
-        upper_t_errorbar(ax, demand_bar_x, cumDemand_mean, cumDemand_std)
-        upper_t_errorbar(ax, capacity_bar_x, cumCapacity_mean, cumCapacity_std)
+        percentile_errorbar(ax, demand_bar_x, cumDemand_mean, cumDemand_p5_err, cumDemand_p95_err)
+        percentile_errorbar(ax, capacity_bar_x, cumCapacity_mean, cumCapacity_p5_err, cumCapacity_p95_err)
         ax.set_axisbelow(True)
         ax.grid(True, axis='y', zorder=0)
         ax.set_xticks(Taxis)
@@ -405,7 +432,7 @@ for i in range(nD):
         if i == nD - 1:
             ax.set_xlabel('Target period t')
         if j == 0:
-            ax.set_ylabel('Cumulative mean with standard deviation')
+            ax.set_ylabel('Cumulative mean with P5-P95')
         if i == 0 and j == 0:
             ax.legend(loc='upper left')
 shared_ymax = max(ax.get_ylim()[1] for ax in axes.flat)
