@@ -59,6 +59,18 @@ HEATMAP_CMAP = truncated_cmap('Blues')
 
 print(f'Saving figures to {FIGURES_DIR}')
 
+def style_heatmap_annotations(ax, luminance_threshold=0.45):
+    if not ax.collections or not ax.texts:
+        return
+
+    facecolors = ax.collections[0].get_facecolors()
+    text_color_dark = '#1a1a1a'
+    text_color_light = 'white'
+    for text, facecolor in zip(ax.texts, facecolors):
+        r, g, b = facecolor[:3]
+        luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        text.set_color(text_color_light if luminance < luminance_threshold else text_color_dark)
+
 # 3. Objective handle
 def obj(w):
     mc, _ = simulate_cost(w, params, seed=OPT_SEED)
@@ -313,6 +325,7 @@ for i in range(nD):
 # Expected total cost heatmap
 fig, ax = plt.subplots()
 sns.heatmap(meanCostMat, annot=True, fmt='.2f', xticklabels=labels_e, yticklabels=labels_d, cmap=HEATMAP_CMAP, ax=ax)
+style_heatmap_annotations(ax)
 ax.set_title('Expected Total Cost')
 ax.set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 ax.set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
@@ -364,11 +377,13 @@ shareSF = np.divide(100 * sfCostMat, den, out=np.zeros_like(sfCostMat), where=de
 fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 fig.suptitle('Costs: absolute with % share')
 sns.heatmap(invCostMat, annot=np.array([[f'{invCostMat[i,j]:.2f} ({shareINV[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap=HEATMAP_CMAP, ax=axes[0])
+style_heatmap_annotations(axes[0])
 axes[0].set_title('Investment Cost')
 axes[0].set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 axes[0].set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
 
 sns.heatmap(sfCostMat, annot=np.array([[f'{sfCostMat[i,j]:.2f} ({shareSF[i,j]:.1f}%)' for j in range(nE)] for i in range(nD)]), fmt='', xticklabels=labels_e, yticklabels=labels_d, cmap=HEATMAP_CMAP, ax=axes[1])
+style_heatmap_annotations(axes[1])
 axes[1].set_title('Shortfall Cost')
 axes[1].set_xlabel('Forecast Uncertainty ($\\xi_{k}^2$)')
 axes[1].set_ylabel('Demand Uncertainty ($\\sigma_t^2$)')
