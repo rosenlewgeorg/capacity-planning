@@ -1,9 +1,12 @@
+import os
 import random
 
+import matplotlib.pyplot as plt
 from scipy.optimize import minimize_scalar
+from matplotlib.colors import LinearSegmentedColormap
 
 
-# Parameters you may want to change
+# Parameters
 ITERATIONS = 1000
 SHORTFALL_COST = 2.0  # c^s
 UNCERTAINTY_LEVELS = {
@@ -14,96 +17,97 @@ UNCERTAINTY_LEVELS = {
 }
 SEED = 67
 
+levels = list(UNCERTAINTY_LEVELS.keys())
+total_cost_matrix = [[0.0 for _ in levels] for _ in levels]
 
-# Draw one random lognormal value for a chosen uncertainty level.
-def sample_lognormal(rng, sigma):
-    if sigma == 0:
-        return 1.0
-    mu = -0.5 * sigma * sigma
-    return rng.lognormvariate(mu, sigma)
+os.makedirs("Figures", exist_ok=True)
 
 
-# Simulate the estimate values used in one scenario.
-def simulate_estimates(rng, sigma_demand, sigma_estimate):
-    estimates = []
-    for _ in range(ITERATIONS):
-        demand = sample_lognormal(rng, sigma_demand)
-        estimate = demand * sample_lognormal(rng, sigma_estimate)
-        estimates.append(estimate)
-    return estimates
+# Print a simple table header.
+header = (
+    f"{'Demand':<6} {'Estimate':<8} "
+    f"{'Exp inv cost':>14} {'Exp short cost':>16} {'Exp total cost':>16}"
+)
+print(header)
+print("-" * len(header))
 
 
-# Compute expected investment, shortfall, and total cost for one S value.
-def expected_costs(investment, estimates):
-    expected_investment_cost = investment
-    expected_shortfall_cost = SHORTFALL_COST * (
-        sum(max(estimate - investment, 0.0) for estimate in estimates) / len(estimates)
-    )
-    expected_total_cost = expected_investment_cost + expected_shortfall_cost
-    return expected_investment_cost, expected_shortfall_cost, expected_total_cost
+# Go through every demand-uncertainty and estimate-uncertainty combination.
+for demand_label, demand_sigma in UNCERTAINTY_LEVELS.items():
+    for estimate_label, estimate_sigma in UNCERTAINTY_LEVELS.items():
+        rng = random.Random(f"{SEED}:{demand_label}:{estimate_label}")
 
+        # Step 1: simulate D and E and store them in lists.
+        D = []
+        E = []
 
-# Solve one uncertainty scenario by finding the best investment level.
-def solve_scenario(demand_label, demand_sigma, estimate_label, estimate_sigma):
-    rng = random.Random(f"{SEED}:{demand_label}:{estimate_label}")
-    estimates = simulate_estimates(rng, demand_sigma, estimate_sigma)
+        for _ in range(ITERATIONS):
+            if demand_sigma == 0:
+                demand = 1.0
+            else:
+                demand_mu = -0.5 * demand_sigma * demand_sigma
+                demand = rng.lognormvariate(demand_mu, demand_sigma)
 
-    result = minimize_scalar(
-        lambda investment: expected_costs(investment, estimates)[2],
-        bounds=(0.0, max(estimates)),
-        method="bounded",
-    )
+            if estimate_sigma == 0:
+                estimate_noise = 1.0
+            else:
+                estimate_mu = -0.5 * estimate_sigma * estimate_sigma
+                estimate_noise = rng.lognormvariate(estimate_mu, estimate_sigma)
 
-    expected_investment_cost, expected_shortfall_cost, expected_total_cost = expected_costs(
-        result.x,
-        estimates,
-    )
+            estimate = demand * estimate_noise
 
-    return {
-        "demand_level": demand_label,
-        "estimate_level": estimate_label,
-        "expected_investment_cost": expected_investment_cost,
-        "expected_shortfall_cost": expected_shortfall_cost,
-        "expected_total_cost": expected_total_cost,
-    }
+            D.append(demand)
+            E.append(estimate)
 
+        # Step 2: optimize S by minimizing the expected total cost formula.
+        result = minimize_scalar(
+            lambda S: S + SHORTFALL_COST * sum(max(e - S, 0.0) for e in E) / ITERATIONS,
+            bounds=(0.0, max(E)),
+            method="bounded",
+        )
 
-# Print the results in a simple table.
-def print_results(results):
-    header = (
-        f"{'Demand':<6} {'Estimate':<8} "
-        f"{'Exp inv cost':>14} {'Exp short cost':>16} {'Exp total cost':>16}"
-    )
-    print(header)
-    print("-" * len(header))
+        S = result.x
 
-    for row in results:
+        # Step 3: compute the final expected costs for this scenario.
+        expected_investment_cost = S
+        expected_shortfall_cost = SHORTFALL_COST * sum(max(e - S, 0.0) for e in E) / ITERATIONS
+        expected_total_cost = expected_investment_cost + expected_shortfall_cost
+        row_index = levels.index(demand_label)
+        col_index = levels.index(estimate_label)
+        total_cost_matrix[row_index][col_index] = expected_total_cost
+
+        # Step 4: print the final results.
         print(
-            f"{row['demand_level']:<6} "
-            f"{row['estimate_level']:<8} "
-            f"{row['expected_investment_cost']:>14.4f} "
-            f"{row['expected_shortfall_cost']:>16.4f} "
-            f"{row['expected_total_cost']:>16.4f}"
+            f"{demand_label:<6} "
+            f"{estimate_label:<8} "
+            f"{expected_investment_cost:>14.4f} "
+            f"{expected_shortfall_cost:>16.4f} "
+            f"{expected_total_cost:>16.4f}"
         )
 
 
-# Run all uncertainty combinations and show the final results.
-def main():
-    results = []
+# Step 5: create a matrix plot for expected total cost.
+cmap = LinearSegmentedColormap.from_list("white_to_blue", ["#ffffff", "#6baed6"])
 
-    for demand_label, demand_sigma in UNCERTAINTY_LEVELS.items():
-        for estimate_label, estimate_sigma in UNCERTAINTY_LEVELS.items():
-            results.append(
-                solve_scenario(
-                    demand_label,
-                    demand_sigma,
-                    estimate_label,
-                    estimate_sigma,
-                )
-            )
+fig, ax = plt.subplots(figsize=(7, 6))
+image = ax.imshow(total_cost_matrix, origin="lower", cmap=cmap)
 
-    print_results(results)
+ax.set_xticks(range(len(levels)))
+ax.set_yticks(range(len(levels)))
+ax.set_xticklabels(levels)
+ax.set_yticklabels(levels)
+ax.set_xlabel("Estimate uncertainty")
+ax.set_ylabel("Demand uncertainty")
+ax.set_title("Expected total cost by uncertainty scenario")
 
+for row_index in range(len(levels)):
+    for col_index in range(len(levels)):
+        value = total_cost_matrix[row_index][col_index]
+        ax.text(col_index, row_index, f"{value:.2f}", ha="center", va="center")
 
-if __name__ == "__main__":
-    main()
+colorbar = plt.colorbar(image, ax=ax)
+colorbar.set_label("Expected total cost")
+
+plt.tight_layout()
+plt.savefig("Figures/expected_total_cost_matrix.png", dpi=300, bbox_inches="tight")
+plt.close()
