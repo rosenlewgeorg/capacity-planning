@@ -19,6 +19,7 @@ SEED = 67
 
 levels = list(UNCERTAINTY_LEVELS.keys())
 total_cost_matrix = [[0.0 for _ in levels] for _ in levels]
+estimate_samples_matrix = [[None for _ in levels] for _ in levels]
 
 os.makedirs("Figures", exist_ok=True)
 
@@ -75,6 +76,7 @@ for demand_label, demand_sigma in UNCERTAINTY_LEVELS.items():
         row_index = levels.index(demand_label)
         col_index = levels.index(estimate_label)
         total_cost_matrix[row_index][col_index] = expected_total_cost
+        estimate_samples_matrix[row_index][col_index] = E.copy()
 
         # Step 4: print the final results.
         print(
@@ -110,4 +112,40 @@ colorbar.set_label("Expected total cost")
 
 plt.tight_layout()
 plt.savefig("Figures/expected_total_cost_matrix.png", dpi=300, bbox_inches="tight")
+plt.close()
+
+
+# Step 6: create a matrix of histograms for the simulated E values.
+all_E_values = []
+for row in estimate_samples_matrix:
+    for samples in row:
+        all_E_values.extend(samples)
+
+global_max_E = max(all_E_values)
+
+fig, axes = plt.subplots(len(levels), len(levels), figsize=(12, 10), sharex=True, sharey=True)
+
+for row_index in range(len(levels)):
+    for col_index in range(len(levels)):
+        plot_row = len(levels) - 1 - row_index
+        ax = axes[plot_row][col_index]
+        E_values = estimate_samples_matrix[row_index][col_index]
+
+        ax.hist(
+            E_values,
+            bins=25,
+            range=(0.0, global_max_E),
+            color="#9ecae1",
+            edgecolor="#3182bd",
+        )
+        ax.set_title(f"{levels[row_index]}/{levels[col_index]}", fontsize=10)
+
+        if plot_row == len(levels) - 1:
+            ax.set_xlabel("E")
+        if col_index == 0:
+            ax.set_ylabel("Count")
+
+fig.suptitle("Distribution of E by uncertainty scenario", fontsize=14)
+plt.tight_layout(rect=(0, 0, 1, 0.97))
+plt.savefig("Figures/estimate_histogram_matrix.png", dpi=300, bbox_inches="tight")
 plt.close()
